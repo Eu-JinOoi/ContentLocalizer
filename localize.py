@@ -71,7 +71,13 @@ def copyFiles(fileHashes,  files_to_copy):
     for file_to_copy in files_to_copy:
         if fileHashes.file_seen(file_to_copy) is False:
             print ("Need to Copy: "+file_to_copy)
-            fileHashes.add_file(file_to_copy)
+            sourcePath, filename = os.path.split(file_to_copy)
+            destination_path = os.path.join("/TemporaryImageHosting", filename);
+            try:
+                shutil.copy2(file_to_copy, destination_path)
+                fileHashes.add_file(file_to_copy)
+            except Exception as e:
+                print("Unable to copy image "+file_to_copy+" to " + destination_path + ". Details: "+str(e));
         else:
             print ("Already seen: "+file_to_copy);
 
