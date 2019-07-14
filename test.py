@@ -5,21 +5,29 @@ import logging
 import os
 import hashlib
 import shutil
+import RPi.GPIO
+import pickle
 from pprint import pprint
 from watchdog.observers import Observer
 from watchdog.events import PatternMatchingEventHandler
 
 class FileHashes:
     HashTable = dict() 
-    def __init__(self):
-        #TODO Load Hash Table
-        print("Need to load HashTable");
-        self.HashTable = dict()
+    PathToPersistentHashTable=""
+    def __init__(self, path_to_persistent_hashtable):
+        self.PathToPersistentHashTable = path_to_persistent_hashtable
+        try:
+            with open(self.PathToPersistentHashTable, 'rb') as f:
+                self.HashTable=pickle.load(f);
+        except:
+            self.HashTable = dict()
+
     def file_seen(self, absolute_path):
         hashValue = self.get_file_hash(absolute_path)
         if hashValue in self.HashTable:
             return True
         return False
+
     def add_file(self, absolute_path):
         hashValue = self.get_file_hash(absolute_path)
         self.HashTable[hashValue]=True
@@ -33,11 +41,14 @@ class FileHashes:
                 hasher.update(buf)
                 buf = afile.read(BLOCKSIZE)
         return hasher.hexdigest()
+    def save(self):
+        with open(self.PathToPersistentHashTable,'wb') as f:
+                pickle.dump(self.HashTable, f, pickle.HIGHEST_PROTOCOL)
     def __del__(self):
         #TODO Save Hash Table
         print "Destuct"
-
-HashHandler = FileHashes(); #TODO [OOI] Find a better way to inject this
+HashTablePath = ".images.hash"
+HashHandler = FileHashes(HashTablePath); #TODO [OOI] Find a better way to inject this
 def get_files_in_directory(path, fileExtensionFilter=None):
     files_to_copy=[]
     try:
@@ -64,6 +75,7 @@ def copyFiles(fileHashes,  files_to_copy):
         else:
             print ("Already seen: "+file_to_copy);
 
+    fileHashes.save()
 def on_created(event):
     allowed_extensions = ["jpg","jpeg","JPG","JPEG","tiff","TIFF"]
     if(os.path.ismount(event.src_path)):
