@@ -8,24 +8,6 @@ from watchdog.observers import Observer
 from watchdog.events import LoggingEventHandler
 from watchdog.events import PatternMatchingEventHandler
 
-class ExternalStorageImageHandler(PatternMatchingEventHandler):
-    patterns=["*.jpg","*.jpeg","*.JPG","*.JPEG","*.png","*.tiff"]
-
-    def process(self, event):
-        """
-        event.event_type
-            'modified' | 'created' | 'moved' | 'deleted'
-        event.is_directory
-            True | False
-        event.src_path
-            /media
-        """
-        # the file will be processed there
-        print event.src_path, event.event_type  # print now only for degug
-    def on_modified(self, event):
-        self.process(event)
-    def on_created(self, event):
-        self.process(event)
 def get_files_in_directory(path, files_to_copy, fileExtensionFilter=None):
     try:
         for fileInPath in os.listdir(path):
@@ -64,9 +46,7 @@ if __name__ == "__main__":
                         format='%(asctime)s - %(message)s',
                         datefmt='%Y-%m-%d %H:%M:%S')
     path = sys.argv[1] if len(sys.argv) > 1 else '.'
-    #event_handler = LoggingEventHandler()
     observer = Observer()
-    #observer.schedule(ExternalStorageImageHandler, path, recursive=True)
     ignore_patterns = "pi"
     ignore_directories = False
     case_sensitive = False
