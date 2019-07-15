@@ -7,6 +7,7 @@ import hashlib
 import shutil
 import RPi.GPIO
 import pickle
+import psutil
 from pprint import pprint
 from watchdog.observers import Observer
 from watchdog.events import PatternMatchingEventHandler
@@ -41,14 +42,17 @@ class FileHashes:
                 hasher.update(buf)
                 buf = afile.read(BLOCKSIZE)
         return hasher.hexdigest()
+
     def save(self):
         with open(self.PathToPersistentHashTable,'wb') as f:
                 pickle.dump(self.HashTable, f, pickle.HIGHEST_PROTOCOL)
+
     def __del__(self):
-        #TODO Save Hash Table
-        print "Destuct"
+        self.save()
+
 HashTablePath = ".images.hash"
 HashHandler = FileHashes(HashTablePath); #TODO [OOI] Find a better way to inject this
+
 def get_files_in_directory(path, fileExtensionFilter=None):
     files_to_copy=[]
     try:
@@ -66,6 +70,7 @@ def get_files_in_directory(path, fileExtensionFilter=None):
     except Exception as e:
         print "Directory Unavailable:"+str(e)
     return files_to_copy
+
 def copyFiles(fileHashes,  files_to_copy):
     print("==============COPY=============")
     for file_to_copy in files_to_copy:
@@ -74,6 +79,9 @@ def copyFiles(fileHashes,  files_to_copy):
             sourcePath, filename = os.path.split(file_to_copy)
             destination_path = os.path.join("/TemporaryImageHosting", filename);
             try:
+                while is_space_for_transfer(file_to_copy) is False:
+                    print("Not enough room to save file "+file_to_copy + ". Waiting for more disk space.");
+                    time.sleep(5);
                 shutil.copy2(file_to_copy, destination_path)
                 fileHashes.add_file(file_to_copy)
             except Exception as e:
@@ -82,6 +90,19 @@ def copyFiles(fileHashes,  files_to_copy):
             print ("Already seen: "+file_to_copy);
 
     fileHashes.save()
+
+def is_space_for_transfer(absolute_path_to_file):
+    buffer_space = 536870912 #512 MB buffer
+    file_size_in_bytes =  get_file_size_in_bytes(absolute_path_to_file)
+    disk_stats = psutil.disk_usage('/')
+    if disk_stats.free - buffer_space >= file_size_in_bytes:
+        return True
+    return False
+
+def get_file_size_in_bytes(absolute_path_to_file):
+    file_info = os.stat(absolute_path_to_file)
+    return file_info.st_size
+
 def on_created(event):
     allowed_extensions = ["jpg","jpeg","JPG","JPEG","tiff","TIFF"]
     if(os.path.ismount(event.src_path)):
@@ -93,13 +114,13 @@ def on_created(event):
 
 def on_deleted(event):
     print("Deleted: "+event.src_path)
-    #pprint(event)
+
 def on_modified(event):
     print("Modified: "+event.src_path)
-    #pprint(event)
+
 def on_moved(event):
     print("Moved: "+event.src_path)
-    #pprint(event)
+
 if __name__ == "__main__":
     patterns="*"
     logging.basicConfig(level=logging.INFO,
