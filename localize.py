@@ -8,6 +8,7 @@ import shutil
 import RPi.GPIO
 import pickle
 import psutil
+import datetime
 from pprint import pprint
 from watchdog.observers import Observer
 from watchdog.events import PatternMatchingEventHandler
@@ -52,42 +53,47 @@ class FileHashes:
 
 HashTablePath = ".images.hash"
 HashHandler = FileHashes(HashTablePath); #TODO [OOI] Find a better way to inject this
-
+def PrintTimestamp(log):
+        print("[" + datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S") + "] - " + log)
 def get_files_in_directory(path, fileExtensionFilter=None):
     files_to_copy=[]
     try:
         for fileInPath in os.listdir(path):
             fullPath = os.path.join(path,fileInPath);
             if os.path.isdir(fullPath) is True:
-                print("Directory: "+ fullPath)
+                PrintTimestamp("Directory: "+ fullPath)
                 subdirectory_files_to_copy=get_files_in_directory(fullPath, fileExtensionFilter)
                 files_to_copy = files_to_copy + subdirectory_files_to_copy
             elif os.path.islink(fullPath) is True:
-                print("Link: "+ fullPath)
+                PrintTimestamp("Link: "+ fullPath)
             elif os.path.isfile(fullPath) is True and (fileExtensionFilter is None or fileInPath.endswith(tuple(fileExtensionFilter))):
                 files_to_copy.append(fullPath)
-                print("  File:"+ fullPath)
+                PrintTimestamp("  File:"+ fullPath)
     except Exception as e:
-        print "Directory Unavailable:"+str(e)
+        PrintTimestamp("Directory Unavailable:"+str(e))
     return files_to_copy
-
 def copyFiles(fileHashes,  files_to_copy):
-    print("==============COPY=============")
+    PrintTimestamp("==============COPY=============")
     for file_to_copy in files_to_copy:
         if fileHashes.file_seen(file_to_copy) is False:
-            print ("Need to Copy: "+file_to_copy)
+            PrintTimestamp ("File has not been copied before. Copying "+file_to_copy)
             sourcePath, filename = os.path.split(file_to_copy)
-            destination_path = os.path.join("/TemporaryImageHosting", filename);
+            #destination_path = os.path.join("/TemporaryImageHosting", filename);
+            destination_path = os.path.join("/media/sda1/photos", filename);
+            if os.path.exists(destination_path):
+                PrintTimestamp("Filename "+ destination_path+" already exists. Skipping till next iteration to prevent duplicate.");
+                continue
             try:
                 while is_space_for_transfer(file_to_copy) is False:
-                    print("Not enough room to save file "+file_to_copy + ". Waiting for more disk space.");
+                    PrintTimestamp("Not enough room to save file "+file_to_copy + ". Waiting for more disk space.");
                     time.sleep(5);
                 shutil.copy2(file_to_copy, destination_path)
                 fileHashes.add_file(file_to_copy)
+                PrintTimestamp("Copied file "+file_to_copy)
             except Exception as e:
-                print("Unable to copy image "+file_to_copy+" to " + destination_path + ". Details: "+str(e));
+                PrintTimestamp("Unable to copy image "+file_to_copy+" to " + destination_path + ". Details: "+str(e));
         else:
-            print ("Already seen: "+file_to_copy);
+            PrintTimestamp("Already seen file: "+file_to_copy);
 
     fileHashes.save()
 
@@ -109,17 +115,17 @@ def on_created(event):
         files_to_copy = get_files_in_directory(event.src_path, allowed_extensions)
         copyFiles(HashHandler, files_to_copy);
     else:
-        print("Not Mount Point: " + event.src_path)
+        PrintTimestamp("Not Mount Point: " + event.src_path)
 
 
 def on_deleted(event):
-    print("Deleted: "+event.src_path)
+    PrintTimestamp("Deleted: "+event.src_path)
 
 def on_modified(event):
-    print("Modified: "+event.src_path)
+    PrintTimestamp("Modified: "+event.src_path)
 
 def on_moved(event):
-    print("Moved: "+event.src_path)
+    PrintTimestamp("Moved: "+event.src_path)
 
 if __name__ == "__main__":
     patterns="*"
